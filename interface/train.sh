@@ -1,0 +1,12 @@
+CUDA_VISIBLE_DEVICES=0,1 PYTHONPATH=./src python train.py \
+    --proj-name musicldm-thornapple-jannabi \
+    --seed 78949 \
+    --config-path musicldm.yaml \
+    --data-dir data \
+    --cache-dir cache \
+    --log-dir log \
+    --batch-size 16 \
+    --epochs 10000 \
+    --iterations 100 \
+    --ckpt-every-n-epochs 1 \
+    --val-every-n-epochs 1

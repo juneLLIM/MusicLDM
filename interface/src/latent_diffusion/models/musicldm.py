@@ -43,7 +43,8 @@ import soundfile as sf
 import os
 
 
-__conditioning_keys__ = {"concat": "c_concat", "crossattn": "c_crossattn", "adm": "y"}
+__conditioning_keys__ = {"concat": "c_concat",
+                         "crossattn": "c_crossattn", "adm": "y"}
 
 
 def disabled_train(self, mode=True):
@@ -80,7 +81,8 @@ class DDPM(pl.LightningModule):
         cosine_s=8e-3,
         given_betas=None,
         original_elbo_weight=0.0,
-        v_posterior=0.0,  # weight for choosing posterior variance as sigma = (1-v) * beta_tilde + v * beta
+        # weight for choosing posterior variance as sigma = (1-v) * beta_tilde + v * beta
+        v_posterior=0.0,
         l_simple_weight=1.0,
         conditioning_key=None,
         parameterization="eps",  # all assuming fixed variance schedules
@@ -143,50 +145,15 @@ class DDPM(pl.LightningModule):
         self.loss_type = loss_type
 
         self.learn_logvar = learn_logvar
-        self.logvar = torch.full(fill_value=logvar_init, size=(self.num_timesteps,))
+        self.logvar = torch.full(
+            fill_value=logvar_init, size=(self.num_timesteps,))
         if self.learn_logvar:
             self.logvar = nn.Parameter(self.logvar, requires_grad=True)
         else:
             self.logvar = nn.Parameter(self.logvar, requires_grad=False)
 
-        self.logger_save_dir = None
-        self.logger_project = None
-        self.logger_version = None
-        self.label_indices_total = None
-        # To avoid the system cannot find metric value for checkpoint
-        self.metrics_buffer = {
-            "val/kullback_leibler_divergence_sigmoid": 15.0,
-            "val/kullback_leibler_divergence_softmax": 10.0,
-            "val/psnr": 0.0,
-            "val/ssim": 0.0,
-            "val/inception_score_mean": 1.0,
-            "val/inception_score_std": 0.0,
-            "val/kernel_inception_distance_mean": 0.0,
-            "val/kernel_inception_distance_std": 0.0,
-            "val/frechet_inception_distance": 133.0,
-            "val/frechet_audio_distance": 32.0,
-        }
         self.initial_learning_rate = None
         self.test_data_subset_path = None
-        
-    def get_log_dir(self):
-        if (
-            self.logger_save_dir is None
-            and self.logger_project is None
-            and self.logger_version is None
-        ):
-            return os.path.join(
-                self.logger.save_dir, self.logger._project, self.logger.version
-            )
-        else:
-            return os.path.join(
-                self.logger_save_dir, self.logger_project, self.logger_version
-            )
-
-    def set_log_dir(self, save_dir, project, version):
-        self.logger_save_dir = save_dir
-        self.logger_project = project
-        self.logger_version = version
 
     def register_schedule(
         self,
@@ -223,21 +190,27 @@ class DDPM(pl.LightningModule):
 
         self.register_buffer("betas", to_torch(betas))
         self.register_buffer("alphas_cumprod", to_torch(alphas_cumprod))
-        self.register_buffer("alphas_cumprod_prev", to_torch(alphas_cumprod_prev))
+        self.register_buffer("alphas_cumprod_prev",
+                             to_torch(alphas_cumprod_prev))
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
-        self.register_buffer("sqrt_alphas_cumprod", to_torch(np.sqrt(alphas_cumprod)))
+        self.register_buffer("sqrt_alphas_cumprod",
+                             to_torch(np.sqrt(alphas_cumprod)))
         self.register_buffer(
-            "sqrt_one_minus_alphas_cumprod", to_torch(np.sqrt(1.0 - alphas_cumprod))
+            "sqrt_one_minus_alphas_cumprod", to_torch(
+                np.sqrt(1.0 - alphas_cumprod))
         )
         self.register_buffer(
-            "log_one_minus_alphas_cumprod", to_torch(np.log(1.0 - alphas_cumprod))
+            "log_one_minus_alphas_cumprod", to_torch(
+                np.log(1.0 - alphas_cumprod))
         )
         self.register_buffer(
-            "sqrt_recip_alphas_cumprod", to_torch(np.sqrt(1.0 / alphas_cumprod))
+            "sqrt_recip_alphas_cumprod", to_torch(
+                np.sqrt(1.0 / alphas_cumprod))
         )
         self.register_buffer(
-            "sqrt_recipm1_alphas_cumprod", to_torch(np.sqrt(1.0 / alphas_cumprod - 1))
+            "sqrt_recipm1_alphas_cumprod", to_torch(
+                np.sqrt(1.0 / alphas_cumprod - 1))
         )
 
         # calculations for posterior q(x_{t-1} | x_t, x_0)
@@ -245,7 +218,8 @@ class DDPM(pl.LightningModule):
             1.0 - alphas_cumprod_prev
         ) / (1.0 - alphas_cumprod) + self.v_posterior * betas
         # above: equal to 1. / (1. / (1. - alpha_cumprod_tm1) + alpha_t / beta_t)
-        self.register_buffer("posterior_variance", to_torch(posterior_variance))
+        self.register_buffer("posterior_variance",
+                             to_torch(posterior_variance))
         # below: log calculation clipped because the posterior variance is 0 at the beginning of the diffusion chain
         self.register_buffer(
             "posterior_log_variance_clipped",
@@ -253,12 +227,14 @@ class DDPM(pl.LightningModule):
         )
         self.register_buffer(
             "posterior_mean_coef1",
-            to_torch(betas * np.sqrt(alphas_cumprod_prev) / (1.0 - alphas_cumprod)),
+            to_torch(betas * np.sqrt(alphas_cumprod_prev) /
+                     (1.0 - alphas_cumprod)),
         )
         self.register_buffer(
             "posterior_mean_coef2",
             to_torch(
-                (1.0 - alphas_cumprod_prev) * np.sqrt(alphas) / (1.0 - alphas_cumprod)
+                (1.0 - alphas_cumprod_prev) *
+                np.sqrt(alphas) / (1.0 - alphas_cumprod)
             ),
         )
 
@@ -327,8 +303,10 @@ class DDPM(pl.LightningModule):
         :param t: the number of diffusion steps (minus 1). Here, 0 means one step.
         :return: A tuple (mean, variance, log_variance), all of x_start's shape.
         """
-        mean = extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-        variance = extract_into_tensor(1.0 - self.alphas_cumprod, t, x_start.shape)
+        mean = extract_into_tensor(
+            self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
+        variance = extract_into_tensor(
+            1.0 - self.alphas_cumprod, t, x_start.shape)
         log_variance = extract_into_tensor(
             self.log_one_minus_alphas_cumprod, t, x_start.shape
         )
@@ -336,17 +314,21 @@ class DDPM(pl.LightningModule):
 
     def predict_start_from_noise(self, x_t, t, noise):
         return (
-            extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
+            extract_into_tensor(
+                self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
             - extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
             * noise
         )
 
     def q_posterior(self, x_start, x_t, t):
         posterior_mean = (
-            extract_into_tensor(self.posterior_mean_coef1, t, x_t.shape) * x_start
-            + extract_into_tensor(self.posterior_mean_coef2, t, x_t.shape) * x_t
+            extract_into_tensor(self.posterior_mean_coef1,
+                                t, x_t.shape) * x_start
+            + extract_into_tensor(self.posterior_mean_coef2,
+                                  t, x_t.shape) * x_t
         )
-        posterior_variance = extract_into_tensor(self.posterior_variance, t, x_t.shape)
+        posterior_variance = extract_into_tensor(
+            self.posterior_variance, t, x_t.shape)
         posterior_log_variance_clipped = extract_into_tensor(
             self.posterior_log_variance_clipped, t, x_t.shape
         )
@@ -375,7 +357,8 @@ class DDPM(pl.LightningModule):
         noise = noise_like(x.shape, device, repeat_noise)
         # no noise when t == 0
         nonzero_mask = (
-            (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1))).contiguous()
+            (1 - (t == 0).float()).reshape(b, *
+                                           ((1,) * (len(x.shape) - 1))).contiguous()
         )
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
@@ -410,7 +393,8 @@ class DDPM(pl.LightningModule):
     def q_sample(self, x_start, t, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
         return (
-            extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
+            extract_into_tensor(self.sqrt_alphas_cumprod,
+                                t, x_start.shape) * x_start
             + extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
             * noise
         )
@@ -424,7 +408,8 @@ class DDPM(pl.LightningModule):
             if mean:
                 loss = torch.nn.functional.mse_loss(target, pred)
             else:
-                loss = torch.nn.functional.mse_loss(target, pred, reduction="none")
+                loss = torch.nn.functional.mse_loss(
+                    target, pred, reduction="none")
         else:
             raise NotImplementedError("unknown loss type '{loss_type}'")
 
@@ -468,7 +453,7 @@ class DDPM(pl.LightningModule):
         return self.p_losses(x, t, *args, **kwargs)
 
     def get_input(self, batch, k):
-        
+
         if k == 'text':
             return list(batch['text'])
         elif k == 'fname':
@@ -477,7 +462,7 @@ class DDPM(pl.LightningModule):
             return batch[k].unsqueeze(1).to(memory_format=torch.contiguous_format).float()
         else:
             return batch[k].to(memory_format=torch.contiguous_format).float()
-        
+
     def shared_step(self, batch):
         x = self.get_input(batch, self.first_stage_key)
         # x = batch[self.first_stage_key].to(memory_format=torch.contiguous_format).float()
@@ -504,7 +489,6 @@ class DDPM(pl.LightningModule):
                 "lr"
             ] = self.initial_learning_rate
 
-
     def training_step(self, batch, batch_idx):
 
         assert self.training, "training step must be in training stage"
@@ -515,7 +499,8 @@ class DDPM(pl.LightningModule):
             and len(self.trainer.optimizers[0].state_dict()["state"].keys()) > 0
         ):
             self.state = (
-                self.trainer.optimizers[0].state_dict()["state"][0]["exp_avg"].clone()
+                self.trainer.optimizers[0].state_dict(
+                )["state"][0]["exp_avg"].clone()
             )
         elif self.state is not None and batch_idx % 1000 == 0:
             assert (
@@ -528,36 +513,12 @@ class DDPM(pl.LightningModule):
                 > 1e-7
             ), "Optimizer is not working"
 
-        if len(self.metrics_buffer.keys()) > 0:
-            for k in self.metrics_buffer.keys():
-                self.log(
-                    k,
-                    self.metrics_buffer[k],
-                    prog_bar=False,
-                    logger=True,
-                    on_step=True,
-                    on_epoch=False,
-                )
-                print(k, self.metrics_buffer[k])
-            self.metrics_buffer = {}
-
         loss, loss_dict = self.shared_step(batch)
 
         self.log_dict(
-            {k: float(v) for k, v in loss_dict.items()},
+            loss_dict,
             prog_bar=True,
-            logger=True,
-            on_step=True,
-            on_epoch=True,
-        )
-
-        self.log(
-            "global_step",
-            float(self.global_step),
-            prog_bar=True,
-            logger=True,
-            on_step=True,
-            on_epoch=False,
+            logger=True
         )
 
         lr = self.trainer.optimizers[0].param_groups[0]["lr"]
@@ -565,9 +526,7 @@ class DDPM(pl.LightningModule):
             "lr_abs",
             float(lr),
             prog_bar=True,
-            logger=True,
-            on_step=True,
-            on_epoch=False,
+            logger=True
         )
 
         return loss
@@ -579,7 +538,7 @@ class DDPM(pl.LightningModule):
                 if self.cond_stage_key_orig == "waveform":
                     self.cond_stage_key = "text"
                     self.cond_stage_model.embed_mode = "text"
-        
+
         return super().on_validation_epoch_start()
 
     # def on_validation_batch_start(self, batch, batch_idx, dataloader_idx):
@@ -590,68 +549,66 @@ class DDPM(pl.LightningModule):
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         assert not self.training, "Validation/Test must not be in training stage"
-        if self.global_rank == 0:
-            name = self.get_validation_folder_name()
-            self.generate_sample(
-                [batch],
-                name=name,
-                unconditional_guidance_scale=self.evaluation_params[
-                    "unconditional_guidance_scale"
-                ],
-                ddim_steps=self.evaluation_params["ddim_sampling_steps"],
-                n_gen=self.evaluation_params["n_candidates_per_samples"],
-            )
+        name = self.get_validation_folder_name()
+        self.generate_sample(
+            [batch],
+            name=name,
+            unconditional_guidance_scale=self.evaluation_params[
+                "unconditional_guidance_scale"
+            ],
+            ddim_steps=self.evaluation_params["ddim_sampling_steps"],
+            n_gen=self.evaluation_params["n_candidates_per_samples"],
+        )
 
-            _, loss_dict_no_ema = self.shared_step(batch)
-            with self.ema_scope():
-                _, loss_dict_ema = self.shared_step(batch)
-                loss_dict_ema = {
-                    key + "_ema": loss_dict_ema[key] for key in loss_dict_ema
-                }
-            self.log_dict(
-                loss_dict_no_ema,
-                prog_bar=False,
-                logger=True,
-                on_step=False,
-                on_epoch=True,
-            )
-            self.log_dict(
-                loss_dict_ema, prog_bar=False, logger=True, on_step=False, on_epoch=True
-            )
+        _, loss_dict_no_ema = self.shared_step(batch)
+        with self.ema_scope():
+            _, loss_dict_ema = self.shared_step(batch)
+            loss_dict_ema = {
+                key + "_ema": loss_dict_ema[key] for key in loss_dict_ema
+            }
+        self.log_dict(
+            loss_dict_no_ema, prog_bar=False, logger=True, sync_dist=True
+        )
+        self.log_dict(
+            loss_dict_ema, prog_bar=False, logger=True, sync_dist=True
+        )
 
     def get_validation_folder_name(self):
-        return "val_%s" % (self.global_step)
+        return "val_epoch%s" % (self.current_epoch)
 
     def on_validation_epoch_end(self) -> None:
         if self.test_data_subset_path is not None:
-            if self.global_rank == 0:
-                from audioldm_eval import EvaluationHelper
+            from audioldm_eval import EvaluationHelper
 
-                print(
-                    "Evaluate model output based on the Audiostock test set: %s"
-                    % self.test_data_subset_path
+            print(
+                "Evaluate model output based on the Audiostock test set: %s"
+                % self.test_data_subset_path
+            )
+            device = torch.device(f"cuda:{0}")
+            name = self.get_validation_folder_name()
+            waveform_save_path = os.path.join(
+                self.trainer.default_root_dir, name)
+            if (
+                os.path.exists(waveform_save_path)
+                and len(os.listdir(waveform_save_path)) > 0
+            ):
+                evaluator = EvaluationHelper(16000, device)
+                metrics = evaluator.main(
+                    waveform_save_path,
+                    self.test_data_subset_path,
                 )
-                device = torch.device(f"cuda:{0}")
-                name = self.get_validation_folder_name()
-                waveform_save_path = os.path.join(self.get_log_dir(), name)
-                if (
-                    os.path.exists(waveform_save_path)
-                    and len(os.listdir(waveform_save_path)) > 0
-                ):
-                    evaluator = EvaluationHelper(16000, device)
-                    metrics = evaluator.main(
-                        waveform_save_path,
-                        self.test_data_subset_path,
-                    )
-
-                    self.metrics_buffer = {
-                        ("val/" + k): float(v) for k, v in metrics.items()
-                    }
-                else:
-                    print(
-                        "The target folder for evaluation does not exist: %s"
-                        % waveform_save_path
-                    )
+                self.log_dict(
+                    metrics,
+                    prog_bar=False,
+                    logger=True,
+                    sync_dist=True
+                )
+                print(metrics)
+            else:
+                print(
+                    "The target folder for evaluation does not exist: %s"
+                    % waveform_save_path
+                )
 
         self.cond_stage_key = self.cond_stage_key_orig
         if self.cond_stage_model is not None:
@@ -756,7 +713,7 @@ class MusicLDM(DDPM):
         ignore_keys = kwargs.pop("ignore_keys", [])
 
         super().__init__(conditioning_key=conditioning_key, *args, **kwargs)
-        
+
         self.concat_mode = concat_mode
         self.cond_stage_trainable = cond_stage_trainable
         self.cond_stage_key = cond_stage_key
@@ -766,7 +723,8 @@ class MusicLDM(DDPM):
         print(f'Use the Latent MixUP of {self.latent_mixup}')
 
         try:
-            self.num_downs = len(first_stage_config.params.ddconfig.ch_mult) - 1
+            self.num_downs = len(
+                first_stage_config.params.ddconfig.ch_mult) - 1
         except:
             self.num_downs = 0
         if not scale_by_std:
@@ -872,7 +830,10 @@ class MusicLDM(DDPM):
 
     def instantiate_cond_stage(self, config):
         model = instantiate_from_config(config)
-        self.cond_stage_model = model
+        self.cond_stage_model = model.eval()
+        self.cond_stage_model.train = disabled_train
+        for param in self.cond_stage_model.parameters():
+            param.requires_grad = False
         if model is not None:
             self.cond_stage_model = self.cond_stage_model.to(self.device)
 
@@ -953,7 +914,8 @@ class MusicLDM(DDPM):
             self.split_input_params["clip_min_weight"],
             self.split_input_params["clip_max_weight"],
         )
-        weighting = weighting.view(1, h * w, 1).repeat(1, 1, Ly * Lx).to(device)
+        weighting = weighting.view(
+            1, h * w, 1).repeat(1, 1, Ly * Lx).to(device)
 
         if self.split_input_params["tie_braker"]:
             L_weighting = self.delta_border(Ly, Lx)
@@ -991,8 +953,10 @@ class MusicLDM(DDPM):
             weighting = self.get_weighting(
                 kernel_size[0], kernel_size[1], Ly, Lx, x.device
             ).to(x.dtype)
-            normalization = fold(weighting).view(1, 1, h, w)  # normalizes the overlap
-            weighting = weighting.view((1, 1, kernel_size[0], kernel_size[1], Ly * Lx))
+            normalization = fold(weighting).view(
+                1, 1, h, w)  # normalizes the overlap
+            weighting = weighting.view(
+                (1, 1, kernel_size[0], kernel_size[1], Ly * Lx))
 
         elif uf > 1 and df == 1:
             fold_params = dict(
@@ -1068,7 +1032,8 @@ class MusicLDM(DDPM):
             x = super().get_input(batch, k)
             x1 = super().get_input(batch, k + '_1')
             x2 = super().get_input(batch, k + '_2')
-            select_idx = torch.where(torch.rand(x.size(0)) < self.latent_mixup)[0]
+            select_idx = torch.where(torch.rand(
+                x.size(0)) < self.latent_mixup)[0]
             x1 = x1[select_idx]
             x2 = x2[select_idx]
 
@@ -1079,8 +1044,8 @@ class MusicLDM(DDPM):
                 z2 = self.get_first_stage_encoding(encoder_posterior).detach()
                 encoder_posterior = self.encode_first_stage(x)
                 z = self.get_first_stage_encoding(encoder_posterior).detach()
-                p = torch.from_numpy(np.random.beta(5,5, x1.size(0)))
-                p = p[:,None,None,None].to(self.device)
+                p = torch.from_numpy(np.random.beta(5, 5, x1.size(0)))
+                p = p[:, None, None, None].to(self.device)
 
                 nz = p * z1 + (1 - p) * z2
                 nz = nz.float()
@@ -1099,10 +1064,12 @@ class MusicLDM(DDPM):
 
                 if cond_key == 'waveform':
                     xc = super().get_input(batch, cond_key).cpu()
-                    nxc = torch.from_numpy(self.mel_spectrogram_to_waveform(nx, save=False)).squeeze(1)
+                    nxc = torch.from_numpy(
+                        self.mel_spectrogram_to_waveform(nx, save=False)).squeeze(1)
                     if nxc.size(-1) != xc.size(-1):
                         nxc = nxc[:, :int(xc.size(-1) * 0.9)]
-                        nxc = torch.nn.functional.pad(nxc, (0, xc.size(-1) - nxc.size(-1)), 'constant', 0.)
+                        nxc = torch.nn.functional.pad(
+                            nxc, (0, xc.size(-1) - nxc.size(-1)), 'constant', 0.)
                     xc[select_idx] = nxc
                     xc = xc.detach()
                     xc.requires_grad = False
@@ -1174,7 +1141,8 @@ class MusicLDM(DDPM):
         if predict_cids:
             if z.dim() == 4:
                 z = torch.argmax(z.exp(), dim=1).long()
-            z = self.first_stage_model.quantize.get_codebook_entry(z, shape=None)
+            z = self.first_stage_model.quantize.get_codebook_entry(
+                z, shape=None)
             z = rearrange(z, "b h w c -> b c h w").contiguous()
 
         z = 1.0 / self.scale_factor * z
@@ -1209,10 +1177,12 @@ class MusicLDM(DDPM):
                     for i in range(z.shape[-1])
                 ]
 
-                o = torch.stack(output_list, axis=-1)  # # (bn, nc, ks[0], ks[1], L)
+                # # (bn, nc, ks[0], ks[1], L)
+                o = torch.stack(output_list, axis=-1)
                 o = o * weighting
                 # Reverse 1. reshape to img shape
-                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
+                # (bn, nc * ks[0] * ks[1], L)
+                o = o.view((o.shape[0], -1, o.shape[-1]))
                 # stitch crops together
                 decoded = fold(o)
                 decoded = decoded / normalization  # norm is shape (1, 1, h, w)
@@ -1230,7 +1200,8 @@ class MusicLDM(DDPM):
         if predict_cids:
             if z.dim() == 4:
                 z = torch.argmax(z.exp(), dim=1).long()
-            z = self.first_stage_model.quantize.get_codebook_entry(z, shape=None)
+            z = self.first_stage_model.quantize.get_codebook_entry(
+                z, shape=None)
             z = rearrange(z, "b h w c -> b c h w").contiguous()
 
         z = 1.0 / self.scale_factor * z
@@ -1265,10 +1236,12 @@ class MusicLDM(DDPM):
                     for i in range(z.shape[-1])
                 ]
 
-                o = torch.stack(output_list, axis=-1)  # # (bn, nc, ks[0], ks[1], L)
+                # # (bn, nc, ks[0], ks[1], L)
+                o = torch.stack(output_list, axis=-1)
                 o = o * weighting
                 # Reverse 1. reshape to img shape
-                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
+                # (bn, nc * ks[0] * ks[1], L)
+                o = o.view((o.shape[0], -1, o.shape[-1]))
                 # stitch crops together
                 decoded = fold(o)
                 decoded = decoded / normalization  # norm is shape (1, 1, h, w)
@@ -1293,24 +1266,31 @@ class MusicLDM(DDPM):
         return waveform
 
     def save_waveform(self, waveform, savepath, name="outwav"):
-        for i in range(waveform.shape[0]):
-            if type(name) is str:
-                path = os.path.join(
-                    savepath, "%s_%s_%s.wav" % (self.global_step, i, name)
-                )
-            elif type(name) is list:
-                path = os.path.join(
-                    savepath,
-                    "%s.wav"
-                    % (
-                        os.path.basename(name[i])
-                        if (not ".wav" in name[i])
-                        else os.path.basename(name[i]).split(".")[0]
-                    ),
-                )
-            else:
-                raise NotImplementedError
-            sf.write(path, waveform[i, 0], samplerate=16000)
+        shape = waveform.shape[1:]
+        waveform = self.all_gather(waveform).reshape(-1, *shape).cpu()
+        if self.global_rank == 0:
+            os.makedirs(savepath, exist_ok=True)
+            for i in range(waveform.shape[0]):
+                if type(name) is str:
+                    path = os.path.join(
+                        savepath, "%s_%s_%s.wav" % (self.global_step, i, name)
+                    )
+                elif type(name) is list:
+                    if len(name) != waveform.shape[0]:
+                        path = os.path.join(savepath, f'{i}.wav')
+                    else:
+                        path = os.path.join(
+                            savepath,
+                            "%s.wav"
+                            % (
+                                os.path.basename(name[i])
+                                if (not ".wav" in name[i])
+                                else os.path.basename(name[i]).split(".")[0]
+                            ),
+                        )
+                else:
+                    raise NotImplementedError
+                sf.write(path, waveform[i, 0], samplerate=16000)
 
     @torch.no_grad()
     def encode_first_stage(self, x):
@@ -1347,7 +1327,8 @@ class MusicLDM(DDPM):
                 o = o * weighting
 
                 # Reverse reshape to img shape
-                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
+                # (bn, nc * ks[0] * ks[1], L)
+                o = o.view((o.shape[0], -1, o.shape[-1]))
                 # stitch crops together
                 decoded = fold(o)
                 decoded = decoded / normalization
@@ -1403,7 +1384,8 @@ class MusicLDM(DDPM):
 
     def _predict_eps_from_xstart(self, x_t, t, pred_xstart):
         return (
-            extract_into_tensor(self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
+            extract_into_tensor(
+                self.sqrt_recip_alphas_cumprod, t, x_t.shape) * x_t
             - pred_xstart
         ) / extract_into_tensor(self.sqrt_recipm1_alphas_cumprod, t, x_t.shape)
 
@@ -1416,7 +1398,8 @@ class MusicLDM(DDPM):
         :return: a batch of [N] KL values (in bits), one per batch element.
         """
         batch_size = x_start.shape[0]
-        t = torch.tensor([self.num_timesteps - 1] * batch_size, device=x_start.device)
+        t = torch.tensor([self.num_timesteps - 1] *
+                         batch_size, device=x_start.device)
         qt_mean, _, qt_log_variance = self.q_mean_variance(x_start, t)
         kl_prior = normal_kl(
             mean1=qt_mean, logvar1=qt_log_variance, mean2=0.0, logvar2=0.0
@@ -1438,7 +1421,8 @@ class MusicLDM(DDPM):
         else:
             raise NotImplementedError()
         # print(model_output.size(), target.size())
-        loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
+        loss_simple = self.get_loss(
+            model_output, target, mean=False).mean([1, 2, 3])
         loss_dict.update({f"{prefix}/loss_simple": loss_simple.mean()})
 
         logvar_t = self.logvar[t].to(self.device)
@@ -1450,7 +1434,8 @@ class MusicLDM(DDPM):
 
         loss = self.l_simple_weight * loss.mean()
 
-        loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3))
+        loss_vlb = self.get_loss(model_output, target,
+                                 mean=False).mean(dim=(1, 2, 3))
         loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
         loss_dict.update({f"{prefix}/loss_vlb": loss_vlb})
         loss += self.original_elbo_weight * loss_vlb
@@ -1471,7 +1456,8 @@ class MusicLDM(DDPM):
         corrector_kwargs=None,
     ):
         t_in = t
-        model_out = self.apply_model(x, t_in, c, return_ids=return_codebook_ids)
+        model_out = self.apply_model(
+            x, t_in, c, return_ids=return_codebook_ids)
 
         if score_corrector is not None:
             assert self.parameterization == "eps"
@@ -1492,7 +1478,8 @@ class MusicLDM(DDPM):
         if clip_denoised:
             x_recon.clamp_(-1.0, 1.0)
         if quantize_denoised:
-            x_recon, _, [_, _, indices] = self.first_stage_model.quantize(x_recon)
+            x_recon, _, [
+                _, _, indices] = self.first_stage_model.quantize(x_recon)
         model_mean, posterior_variance, posterior_log_variance = self.q_posterior(
             x_start=x_recon, x_t=x, t=t
         )
@@ -1544,7 +1531,8 @@ class MusicLDM(DDPM):
             noise = torch.nn.functional.dropout(noise, p=noise_dropout)
         # no noise when t == 0
         nonzero_mask = (
-            (1 - (t == 0).float()).reshape(b, *((1,) * (len(x.shape) - 1))).contiguous()
+            (1 - (t == 0).float()).reshape(b, *
+                                           ((1,) * (len(x.shape) - 1))).contiguous()
         )
 
         # if return_codebook_ids:
@@ -1553,7 +1541,8 @@ class MusicLDM(DDPM):
         #     ).exp() * noise, logits.argmax(dim=1)
         if return_x0:
             return (
-                model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise,
+                model_mean + nonzero_mask *
+                (0.5 * model_log_variance).exp() * noise,
                 x0,
             )
         else:
@@ -1626,7 +1615,8 @@ class MusicLDM(DDPM):
             if self.shorten_cond_schedule:
                 assert self.model.conditioning_key != "hybrid"
                 tc = self.cond_ids[ts].to(cond.device)
-                cond = self.q_sample(x_start=cond, t=tc, noise=torch.randn_like(cond))
+                cond = self.q_sample(x_start=cond, t=tc,
+                                     noise=torch.randn_like(cond))
 
             img, x0_partial = self.p_sample(
                 img,
@@ -1687,21 +1677,24 @@ class MusicLDM(DDPM):
         if start_T is not None:
             timesteps = min(timesteps, start_T)
         iterator = (
-            tqdm(reversed(range(0, timesteps)), desc="Sampling t", total=timesteps)
+            tqdm(reversed(range(0, timesteps)),
+                 desc="Sampling t", total=timesteps)
             if verbose
             else reversed(range(0, timesteps))
         )
 
         if mask is not None:
             assert x0 is not None
-            assert x0.shape[2:3] == mask.shape[2:3]  # spatial size has to match
+            # spatial size has to match
+            assert x0.shape[2:3] == mask.shape[2:3]
 
         for i in iterator:
             ts = torch.full((b,), i, device=device, dtype=torch.long)
             if self.shorten_cond_schedule:
                 assert self.model.conditioning_key != "hybrid"
                 tc = self.cond_ids[ts].to(cond.device)
-                cond = self.q_sample(x_start=cond, t=tc, noise=torch.randn_like(cond))
+                cond = self.q_sample(x_start=cond, t=tc,
+                                     noise=torch.randn_like(cond))
             img = self.p_sample(
                 img,
                 cond,
@@ -1740,7 +1733,8 @@ class MusicLDM(DDPM):
         **kwargs,
     ):
         if shape is None:
-            shape = (batch_size, self.channels, self.latent_t_size, self.latent_f_size)
+            shape = (batch_size, self.channels,
+                     self.latent_t_size, self.latent_f_size)
         if cond is not None:
             if isinstance(cond, dict):
                 cond = {
@@ -1853,7 +1847,8 @@ class MusicLDM(DDPM):
         try:
             batchs = iter(batchs)
         except TypeError:
-            raise ValueError("The first input argument should be an iterable object")
+            raise ValueError(
+                "The first input argument should be an iterable object")
 
         if use_plms:
             assert ddim_steps is not None
@@ -1879,8 +1874,7 @@ class MusicLDM(DDPM):
             return best_offset
 
         use_ddim = ddim_steps is not None
-        waveform_save_path = os.path.join(self.get_log_dir(), name)
-        os.makedirs(waveform_save_path, exist_ok=True)
+        waveform_save_path = os.path.join(self.trainer.default_root_dir, name)
         print("Waveform save path: ", waveform_save_path)
 
         with self.ema_scope("Plotting"):
@@ -1901,7 +1895,8 @@ class MusicLDM(DDPM):
 
                 if unconditional_guidance_scale != 1.0:
                     unconditional_conditioning = (
-                        self.cond_stage_model.get_unconditional_condition(batch_size)
+                        self.cond_stage_model.get_unconditional_condition(
+                            batch_size)
                     )
 
                 fnames = list(super().get_input(batch, "fname"))
@@ -1942,10 +1937,11 @@ class MusicLDM(DDPM):
                         _, h, w = samples.shape[0], samples.shape[2], samples.shape[3]
 
                         mask = torch.ones(batch_size, h, w).to(self.device)
-                        mask[:, 3 * (h // 16) :, :] = 0
+                        mask[:, 3 * (h // 16):, :] = 0
                         mask = mask[:, None, ...]
 
-                        rolled_sample = torch.roll(samples, shifts=(h // 4), dims=2)
+                        rolled_sample = torch.roll(
+                            samples, shifts=(h // 4), dims=2)
 
                         samples, _ = self.sample_log(
                             cond=c,
@@ -1974,11 +1970,12 @@ class MusicLDM(DDPM):
                         )
 
                         margin_waveform = waveform[
-                            ..., -(waveform_segment_length // 4) :
+                            ..., -(waveform_segment_length // 4):
                         ]
                         offset = find_best_waveform_alignment(
                             margin_waveform,
-                            waveform_continuation[..., : margin_waveform.shape[-1]],
+                            waveform_continuation[...,
+                                                  : margin_waveform.shape[-1]],
                         )
                         print("Concatenation offset is %s" % offset)
                         waveform = np.concatenate(
@@ -1990,7 +1987,8 @@ class MusicLDM(DDPM):
                             ],
                             axis=-1,
                         )
-                        self.save_waveform(waveform, waveform_save_path, name=fnames)
+                        self.save_waveform(
+                            waveform, waveform_save_path, name=fnames)
                         if waveform.shape[-1] / 16000 > generate_duration:
                             break
 
@@ -2016,21 +2014,22 @@ class MusicLDM(DDPM):
         try:
             batchs = iter(batchs)
         except TypeError:
-            raise ValueError("The first input argument should be an iterable object")
+            raise ValueError(
+                "The first input argument should be an iterable object")
 
         if use_plms:
             assert ddim_steps is not None
 
         use_ddim = ddim_steps is not None
-        waveform_save_path = os.path.join(self.get_log_dir(), name)
-        os.makedirs(waveform_save_path, exist_ok=True)
+        waveform_save_path = os.path.join(self.trainer.default_root_dir, name)
         print("Waveform save path: ", waveform_save_path)
 
         if (
             "audiocaps" in waveform_save_path
             and len(os.listdir(waveform_save_path)) >= 964
         ):
-            print("The evaluation has already been done at %s" % waveform_save_path)
+            print("The evaluation has already been done at %s" %
+                  waveform_save_path)
             return waveform_save_path
 
         with self.ema_scope("Plotting"):
@@ -2053,7 +2052,8 @@ class MusicLDM(DDPM):
 
                 if unconditional_guidance_scale != 1.0:
                     unconditional_conditioning = (
-                        self.cond_stage_model.get_unconditional_condition(batch_size)
+                        self.cond_stage_model.get_unconditional_condition(
+                            batch_size)
                     )
 
                 fnames = list(super().get_input(batch, "fname"))
@@ -2084,16 +2084,16 @@ class MusicLDM(DDPM):
 
                     best_index = []
                     for i in range(z.shape[0]):
-                        candidates = similarity[i :: z.shape[0]]
+                        candidates = similarity[i:: z.shape[0]]
                         max_index = torch.argmax(candidates).item()
                         best_index.append(i + max_index * z.shape[0])
-                        print("Similarity between generated audio and text", similarity)
-                        print("Choose the following indexes:", best_index)
+                    print(
+                        f"\nTexts:\t{text},\nSimilarity between generated audio and text:\t{similarity},\nBest indices:\t{best_index}")
                 else:
                     best_index = torch.arange(z.shape[0])
 
                 waveform = waveform[best_index]
-                
+
                 self.save_waveform(waveform, waveform_save_path, name=fnames)
         return waveform_save_path
 
@@ -2115,14 +2115,14 @@ class MusicLDM(DDPM):
         try:
             batchs = iter(batchs)
         except TypeError:
-            raise ValueError("The first input argument should be an iterable object")
+            raise ValueError(
+                "The first input argument should be an iterable object")
 
         if use_plms:
             assert ddim_steps is not None
 
         use_ddim = ddim_steps is not None
-        waveform_save_path = os.path.join(self.get_log_dir(), name)
-        os.makedirs(waveform_save_path, exist_ok=True)
+        waveform_save_path = os.path.join(self.trainer.default_root_dir, name)
         print("Waveform save path: ", waveform_save_path)
         with self.ema_scope("Plotting Inpaint"):
             for batch in batchs:
@@ -2143,7 +2143,8 @@ class MusicLDM(DDPM):
 
                 if unconditional_guidance_scale != 1.0:
                     unconditional_conditioning = (
-                        self.cond_stage_model.get_unconditional_condition(batch_size)
+                        self.cond_stage_model.get_unconditional_condition(
+                            batch_size)
                     )
 
                 fnames = list(super().get_input(batch, "fname"))
@@ -2181,7 +2182,7 @@ class MusicLDM(DDPM):
 
                 best_index = []
                 for i in range(z.shape[0]):
-                    candidates = similarity[i :: z.shape[0]]
+                    candidates = similarity[i:: z.shape[0]]
                     max_index = torch.argmax(candidates).item()
                     best_index.append(i + max_index * z.shape[0])
 
@@ -2210,14 +2211,14 @@ class MusicLDM(DDPM):
         try:
             batchs = iter(batchs)
         except TypeError:
-            raise ValueError("The first input argument should be an iterable object")
+            raise ValueError(
+                "The first input argument should be an iterable object")
 
         if use_plms:
             assert ddim_steps is not None
 
         use_ddim = ddim_steps is not None
-        waveform_save_path = os.path.join(self.get_log_dir(), name)
-        os.makedirs(waveform_save_path, exist_ok=True)
+        waveform_save_path = os.path.join(self.trainer.default_root_dir, name)
         print("Waveform save path: ", waveform_save_path)
         with self.ema_scope("Plotting Inpaint"):
             for batch in batchs:
@@ -2238,7 +2239,8 @@ class MusicLDM(DDPM):
 
                 if unconditional_guidance_scale != 1.0:
                     unconditional_conditioning = (
-                        self.cond_stage_model.get_unconditional_condition(batch_size)
+                        self.cond_stage_model.get_unconditional_condition(
+                            batch_size)
                     )
 
                 fnames = list(super().get_input(batch, "fname"))
@@ -2246,7 +2248,7 @@ class MusicLDM(DDPM):
                 _, h, w = z.shape[0], z.shape[2], z.shape[3]
 
                 mask = torch.ones(batch_size, h, w).to(self.device)
-                mask[:, h // 4 : 3 * (h // 4), :] = 0
+                mask[:, h // 4: 3 * (h // 4), :] = 0
                 mask = mask[:, None, ...]
 
                 samples, _ = self.sample_log(
@@ -2275,7 +2277,7 @@ class MusicLDM(DDPM):
 
                 best_index = []
                 for i in range(z.shape[0]):
-                    candidates = similarity[i :: z.shape[0]]
+                    candidates = similarity[i:: z.shape[0]]
                     max_index = torch.argmax(candidates).item()
                     best_index.append(i + max_index * z.shape[0])
 
@@ -2304,14 +2306,14 @@ class MusicLDM(DDPM):
         try:
             batchs = iter(batchs)
         except TypeError:
-            raise ValueError("The first input argument should be an iterable object")
+            raise ValueError(
+                "The first input argument should be an iterable object")
 
         if use_plms:
             assert ddim_steps is not None
 
         use_ddim = ddim_steps is not None
-        waveform_save_path = os.path.join(self.get_log_dir(), name)
-        os.makedirs(waveform_save_path, exist_ok=True)
+        waveform_save_path = os.path.join(self.trainer.default_root_dir, name)
         print("Waveform save path: ", waveform_save_path)
         with self.ema_scope("Plotting Inpaint"):
             for batch in batchs:
@@ -2332,7 +2334,8 @@ class MusicLDM(DDPM):
 
                 if unconditional_guidance_scale != 1.0:
                     unconditional_conditioning = (
-                        self.cond_stage_model.get_unconditional_condition(batch_size)
+                        self.cond_stage_model.get_unconditional_condition(
+                            batch_size)
                     )
 
                 fnames = list(super().get_input(batch, "fname"))
@@ -2340,7 +2343,7 @@ class MusicLDM(DDPM):
                 _, h, w = z.shape[0], z.shape[2], z.shape[3]
 
                 mask = torch.ones(batch_size, h, w).to(self.device)
-                mask[:, int(h * 0.325) :, :] = 0
+                mask[:, int(h * 0.325):, :] = 0
                 mask = mask[:, None, ...]
 
                 samples, _ = self.sample_log(
@@ -2369,7 +2372,7 @@ class MusicLDM(DDPM):
 
                 best_index = []
                 for i in range(z.shape[0]):
-                    candidates = similarity[i :: z.shape[0]]
+                    candidates = similarity[i:: z.shape[0]]
                     max_index = torch.argmax(candidates).item()
                     best_index.append(i + max_index * z.shape[0])
 
@@ -2398,14 +2401,14 @@ class MusicLDM(DDPM):
         try:
             batchs = iter(batchs)
         except TypeError:
-            raise ValueError("The first input argument should be an iterable object")
+            raise ValueError(
+                "The first input argument should be an iterable object")
 
         if use_plms:
             assert ddim_steps is not None
 
         use_ddim = ddim_steps is not None
-        waveform_save_path = os.path.join(self.get_log_dir(), name)
-        os.makedirs(waveform_save_path, exist_ok=True)
+        waveform_save_path = os.path.join(self.trainer.default_root_dir, name)
         print("Waveform save path: ", waveform_save_path)
         with self.ema_scope("Plotting Inpaint"):
             for batch in batchs:
@@ -2426,7 +2429,8 @@ class MusicLDM(DDPM):
 
                 if unconditional_guidance_scale != 1.0:
                     unconditional_conditioning = (
-                        self.cond_stage_model.get_unconditional_condition(batch_size)
+                        self.cond_stage_model.get_unconditional_condition(
+                            batch_size)
                     )
 
                 fnames = list(super().get_input(batch, "fname"))
@@ -2434,7 +2438,7 @@ class MusicLDM(DDPM):
                 _, h, w = z.shape[0], z.shape[2], z.shape[3]
 
                 mask = torch.ones(batch_size, h, w).to(self.device)
-                mask[:, :, 3 * (w // 4) :] = 0
+                mask[:, :, 3 * (w // 4):] = 0
                 mask = mask[:, None, ...]
 
                 samples, _ = self.sample_log(
@@ -2463,7 +2467,7 @@ class MusicLDM(DDPM):
 
                 best_index = []
                 for i in range(z.shape[0]):
-                    candidates = similarity[i :: z.shape[0]]
+                    candidates = similarity[i:: z.shape[0]]
                     max_index = torch.argmax(candidates).item()
                     best_index.append(i + max_index * z.shape[0])
 

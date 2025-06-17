@@ -7,27 +7,23 @@ All rights reserved
 
 contact: knutchen@ucsd.edu
 '''
+from pytorch_lightning import Trainer, seed_everything
+from torch.utils.data import DataLoader
+from utilities.data.dataset import TextDataset
+from latent_diffusion.models.musicldm import MusicLDM
+from pytorch_lightning.strategies.ddp import DDPStrategy
+import torch
+import yaml
+import argparse
+import numpy as np
+import os
 import sys
 
 sys.path.append("src")
 
-import os
-
-import numpy as np
-
-import argparse
-import yaml
-import torch
-
-from pytorch_lightning.strategies.ddp import DDPStrategy
-from latent_diffusion.models.musicldm import MusicLDM
-from utilities.data.dataset import TextDataset
-
-from torch.utils.data import DataLoader
-from pytorch_lightning import Trainer, seed_everything
-
 
 config_path = 'musicldm.yaml'
+
 
 def main(config, texts, seed):
 
@@ -50,7 +46,7 @@ def main(config, texts, seed):
     print(f'Samples with be saved at {log_path}')
 
     dataset = TextDataset(
-        data = texts,
+        data=texts,
         logfile=os.path.join(log_path, "meta.txt")
     )
 
@@ -76,8 +72,10 @@ def main(config, texts, seed):
     )
 
     trainer.validate(latent_diffusion, loader)
-    
-    print(f"Generation Finished. Please check the generation samples and the meta file at {log_path}")
+
+    print(
+        f"Generation Finished. Please check the generation samples and the meta file at {log_path}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -108,14 +106,14 @@ if __name__ == "__main__":
 
     if args.text != "" and args.texts != "":
         raise f'********** Error: Only one of text and texts configuration could be given **********'
-    
+
     if args.text != "":
         print(f'********** MusicLDM: generate the music sample from the text:')
         print('----------------------------------------------')
         print(f'{args.text}')
         print('----------------------------------------------')
         texts = [args.text]
-    
+
     if args.texts != "":
         print(f'********** MusicLDM: generate music samples from the text file:')
         print('----------------------------------------------')
@@ -125,4 +123,3 @@ if __name__ == "__main__":
 
     config = yaml.load(open(config_path, 'r'), Loader=yaml.FullLoader)
     main(config, texts, args.seed)
-

@@ -1,8 +1,13 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.vscode/
 *.py[cod]
 
 # C extensions
 *.so
 
 lightning_logs/
+log/
+cache/
+ckpt/
+data/

@@ -1,12 +1,3 @@
-project_name: "controllable-text-to-music-audiostock10k"
-log_directory: "/graft1/code/kechen/musicldm/log" # Replace
-cache_location: "/graft1/code/kechen/musicldm/cache" # Replace
-test_mode: True
-
-id: 
-  version: "v1"
-  name: "musicldm-audiostock-10k-latentmixup"
-
 augmentation:
   mixup: 0.0
   return_all_wav: False
@@ -37,17 +28,15 @@ preprocessing:
 
 model:
   target: latent_diffusion.models.musicldm.MusicLDM
-  num_workers: 8
   params:
     base_learning_rate: 3.0e-05
-    batchsize: 1
     linear_start: 0.0015
     linear_end: 0.0195
     num_timesteps_cond: 1
     log_every_t: 200
     timesteps: 1000
     first_stage_key: fbank
-    cond_stage_key: waveform 
+    cond_stage_key: text 
     latent_t_size: 256 
     latent_f_size: 16 
     channels: 8 
@@ -56,7 +45,7 @@ model:
     conditioning_key: film
     monitor: val/loss_simple_ema
     scale_by_std: true
-    ckpt_path: '/graft1/code/kechen/musicldm/ckpt/musicldm-ckpt.ckpt' # Replace
+    ckpt_path: 'log/musicldm-thornapple-jannabi/2025-06-15_20-07-48/checkpoints/last.ckpt' # Replace
     unet_config:
       target: latent_diffusion.modules.diffusionmodules.openaimodel.UNetModel
       params:
@@ -83,8 +72,7 @@ model:
       base_learning_rate: 4.5e-05
       target: latent_encoder.autoencoder.AutoencoderKL
       params:
-        reload_from_ckpt: '/graft1/code/kechen/musicldm/ckpt/vae-ckpt.ckpt' # Replace
-        batchsize: 4
+        reload_from_ckpt: 'ckpt/vae-ckpt.ckpt' # Replace
         monitor: val/rec_loss
         image_key: fbank
         subband: 1
@@ -100,7 +88,7 @@ model:
             disc_in_channels: 1
         ddconfig:
           mel_num: 64
-          hifigan_ckpt: '/graft1/code/kechen/musicldm/ckpt/hifigan-ckpt(only generator).ckpt' # Replace
+          hifigan_ckpt: 'ckpt/hifigan-ckpt(only generator).ckpt' # Replace
           double_z: true
           z_channels: 8 
           resolution: 256
@@ -119,12 +107,12 @@ model:
     cond_stage_config:
       target: latent_diffusion.modules.encoders.modules.CLAPAudioEmbeddingClassifierFreev2
       params:
-        pretrained_path: '/graft1/code/kechen/musicldm/ckpt/clap-ckpt.pt' # Replace
+        pretrained_path: 'ckpt/clap-ckpt.pt' # Replace
         sampling_rate: 16000
-        embed_mode: audio 
+        embed_mode: text
         unconditional_prob: 0.1
 
     evaluation_params:
-      unconditional_guidance_scale: 2.0
-      ddim_sampling_steps: 200
-      n_candidates_per_samples: 5
+      unconditional_guidance_scale: 1.0
+      ddim_sampling_steps: 100
+      n_candidates_per_samples: 1
