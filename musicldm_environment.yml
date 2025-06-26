@@ -1,4 +1,4 @@
-name: musicldm_env
+name: musicldm
 channels:
   - conda-forge
   - defaults

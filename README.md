@@ -58,7 +58,7 @@ And this might take a long time to install all dependencies.
 ### Step 3: Activate the environment:
 
 ```
-conda activate musicldm_env
+conda activate musicldm
 ```
 
 ### Step 4: Run MusicLDM:
