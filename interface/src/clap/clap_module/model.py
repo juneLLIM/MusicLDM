@@ -172,7 +172,8 @@ class ModifiedResNet(nn.Module):
             width // 2, width // 2, kernel_size=3, padding=1, bias=False
         )
         self.bn2 = nn.BatchNorm2d(width // 2)
-        self.conv3 = nn.Conv2d(width // 2, width, kernel_size=3, padding=1, bias=False)
+        self.conv3 = nn.Conv2d(
+            width // 2, width, kernel_size=3, padding=1, bias=False)
         self.bn3 = nn.BatchNorm2d(width)
         self.avgpool = nn.AvgPool2d(2)
         self.relu = nn.ReLU(inplace=True)
@@ -185,7 +186,8 @@ class ModifiedResNet(nn.Module):
         self.layer4 = self._make_layer(width * 8, layers[3], stride=2)
 
         embed_dim = width * 32  # the ResNet feature dimension
-        self.attnpool = AttentionPool2d(image_size // 32, embed_dim, heads, output_dim)
+        self.attnpool = AttentionPool2d(
+            image_size // 32, embed_dim, heads, output_dim)
 
         self.init_parameters()
 
@@ -246,7 +248,8 @@ class LayerNorm(nn.LayerNorm):
 
     def forward(self, x: torch.Tensor):
         orig_type = x.dtype
-        x = F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
+        x = F.layer_norm(x, self.normalized_shape,
+                         self.weight, self.bias, self.eps)
         return x.to(orig_type)
 
 
@@ -331,7 +334,8 @@ class VisualTransformer(nn.Module):
         )
         self.ln_pre = LayerNorm(width)
 
-        self.text_branch = Transformer(width, layers, heads, act_layer=act_layer)
+        self.text_branch = Transformer(
+            width, layers, heads, act_layer=act_layer)
 
         self.ln_post = LayerNorm(width)
         self.proj = nn.Parameter(scale * torch.randn(width, output_dim))
@@ -345,7 +349,8 @@ class VisualTransformer(nn.Module):
 
     def forward(self, x: torch.Tensor):
         x = self.conv1(x)  # shape = [*, width, grid, grid]
-        x = x.reshape(x.shape[0], x.shape[1], -1)  # shape = [*, width, grid ** 2]
+        # shape = [*, width, grid ** 2]
+        x = x.reshape(x.shape[0], x.shape[1], -1)
         x = x.permute(0, 2, 1)  # shape = [*, grid ** 2, width]
         x = torch.cat(
             [
@@ -385,10 +390,12 @@ class CLAPVisionCfg:
         False  # use (imagenet) pretrained weights for named model
     )
     timm_pool: str = (
-        "avg"  # feature pooling for timm model ('abs_attn', 'rot_attn', 'avg', '')
+        # feature pooling for timm model ('abs_attn', 'rot_attn', 'avg', '')
+        "avg"
     )
     timm_proj: str = (
-        "linear"  # linear projection for timm model output ('linear', 'mlp', '')
+        # linear projection for timm model output ('linear', 'mlp', '')
+        "linear"
     )
 
 
@@ -444,7 +451,6 @@ class CLAP(nn.Module):
         self.joint_embed_shape = joint_embed_shape
         self.mlp_act = mlp_act
 
-
         self.context_length = text_cfg.context_length
 
         # OpenAI models are pretrained w/ QuickGELU but native nn.GELU is both faster and more
@@ -462,12 +468,15 @@ class CLAP(nn.Module):
         # audio branch
         # audio branch parameters
         if audio_cfg.model_type == "PANN":
-            self.audio_branch = create_pann_model(audio_cfg, enable_fusion, fusion_type)
+            self.audio_branch = create_pann_model(
+                audio_cfg, enable_fusion, fusion_type)
         elif audio_cfg.model_type == "HTSAT":
-            self.audio_branch = create_htsat_model(audio_cfg, enable_fusion, fusion_type)
+            self.audio_branch = create_htsat_model(
+                audio_cfg, enable_fusion, fusion_type)
         else:
             logging.error(f"Model config for {audio_cfg.model_type} not found")
-            raise RuntimeError(f"Model config for {audio_cfg.model_type} not found.")
+            raise RuntimeError(
+                f"Model config for {audio_cfg.model_type} not found.")
 
         # text branch
         # text branch parameters
@@ -479,7 +488,8 @@ class CLAP(nn.Module):
                 act_layer=act_layer,
             )
             self.vocab_size = text_cfg.vocab_size
-            self.token_embedding = nn.Embedding(text_cfg.vocab_size, text_cfg.width)
+            self.token_embedding = nn.Embedding(
+                text_cfg.vocab_size, text_cfg.width)
             self.positional_embedding = nn.Parameter(
                 torch.empty(self.context_length, text_cfg.width)
             )
@@ -524,7 +534,8 @@ class CLAP(nn.Module):
             )
         else:
             logging.error(f"Model config for {text_cfg.model_type} not found")
-            raise RuntimeError(f"Model config for {text_cfg.model_type} not found.")
+            raise RuntimeError(
+                f"Model config for {text_cfg.model_type} not found.")
         self.text_branch_type = text_cfg.model_type
         # text branch parameters
 
@@ -537,14 +548,15 @@ class CLAP(nn.Module):
 
         # ============================================================================================================
         self.audio_projection = nn.Sequential(
-                nn.Linear(embed_dim, self.joint_embed_shape),
-                mlp_act_layer,
-                nn.Linear(self.joint_embed_shape, self.joint_embed_shape)
-            )
+            nn.Linear(embed_dim, self.joint_embed_shape),
+            mlp_act_layer,
+            nn.Linear(self.joint_embed_shape, self.joint_embed_shape)
+        )
 
         self.logit_scale_a = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         self.logit_scale_t = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-        self.register_buffer("attn_mask", self.build_attention_mask(), persistent=False)
+        self.register_buffer(
+            "attn_mask", self.build_attention_mask(), persistent=False)
 
         self.init_text_branch_parameters()
 
@@ -587,7 +599,8 @@ class CLAP(nn.Module):
         return mask
 
     def encode_audio(self, audio, device):
-        return self.audio_branch(audio, mixup_lambda=None, device=device)  # mix lambda needs to add
+        # mix lambda needs to add
+        return self.audio_branch(audio, mixup_lambda=None, device=device)
 
     # def list_of_dict_of_tensor2dict_of_tensor(self, x, device):
     #     tmp = {}
@@ -612,12 +625,14 @@ class CLAP(nn.Module):
 
             # x.shape = [batch_size, n_ctx, transformer.width]
             # take features from the eot embedding (eot_token is the highest number in each sequence)
-            x = self.text_projection(x[torch.arange(x.shape[0]), text.argmax(dim=-1)])
+            x = self.text_projection(
+                x[torch.arange(x.shape[0]), text.argmax(dim=-1)])
         elif self.text_branch_type == "bert":
             # text = self.list_of_dict_of_tensor2dict_of_tensor(text, device)
             # text = BatchEncoding(text)
             x = self.text_branch(
-                input_ids=text["input_ids"].to(device=device, non_blocking=True),
+                input_ids=text["input_ids"].to(
+                    device=device, non_blocking=True),
                 attention_mask=text["attention_mask"].to(
                     device=device, non_blocking=True
                 ),
@@ -628,7 +643,8 @@ class CLAP(nn.Module):
             x = self.text_projection(x)
         elif self.text_branch_type == "roberta":
             x = self.text_branch(
-                input_ids=text["input_ids"].to(device=device, non_blocking=True),
+                input_ids=text["input_ids"].to(
+                    device=device, non_blocking=True),
                 attention_mask=text["attention_mask"].to(
                     device=device, non_blocking=True
                 ),
@@ -636,15 +652,17 @@ class CLAP(nn.Module):
             x = self.text_projection(x)
         elif self.text_branch_type == "bart":
             x = torch.mean(self.text_branch(
-                input_ids=text["input_ids"].to(device=device, non_blocking=True),
+                input_ids=text["input_ids"].to(
+                    device=device, non_blocking=True),
                 attention_mask=text["attention_mask"].to(
                     device=device, non_blocking=True
                 ),
-            )["encoder_last_hidden_state"],axis=1)
+            )["encoder_last_hidden_state"], axis=1)
             x = self.text_projection(x)
         else:
             logging.error(f"Model type {self.text_branch_type} not found")
-            raise RuntimeError(f"Model type {self.text_branch_type} not found.")
+            raise RuntimeError(
+                f"Model type {self.text_branch_type} not found.")
         return x
 
     def forward(self, audio, text, device=None):
@@ -669,7 +687,8 @@ class CLAP(nn.Module):
             return self.encode_text(text, device=device)
         elif text is None:
             return self.audio_projection(self.encode_audio(audio, device=device)["embedding"])
-        audio_features = self.audio_projection(self.encode_audio(audio, device=device)["embedding"])
+        audio_features = self.audio_projection(
+            self.encode_audio(audio, device=device)["embedding"])
         audio_features = F.normalize(audio_features, dim=-1)
 
         text_features = self.encode_text(
@@ -714,7 +733,7 @@ class CLAP(nn.Module):
             data[k] = data[k].to(device)
         text_embeds = self.encode_text(data, device=device)
         text_embeds = F.normalize(text_embeds, dim=-1)
-        
+
         return text_embeds
 
     def get_audio_embedding(self, data):
@@ -735,13 +754,13 @@ class CLAP(nn.Module):
         input_dict = {}
         keys = data[0].keys()
         for k in keys:
-            input_dict[k] = torch.cat([d[k].unsqueeze(0) for d in data], dim=0).to(device)
-        audio_embeds = self.encode_audio(input_dict, device=device)["embedding"]
+            input_dict[k] = torch.cat([d[k].unsqueeze(0)
+                                      for d in data], dim=0).to(device)
+        audio_embeds = self.encode_audio(
+            input_dict, device=device)["embedding"]
         audio_embeds = self.audio_projection(audio_embeds)
         audio_embeds = F.normalize(audio_embeds, dim=-1)
         return audio_embeds
-
-            
 
     def audio_infer(self, audio, hopsize=None, device=None):
         """Forward one audio and produce the audio embedding
@@ -769,7 +788,8 @@ class CLAP(nn.Module):
         # PANN
         if self.audio_cfg.model_type == "PANN":
             audio_input = audio.unsqueeze(dim=0)
-            output_dict[key] = self.encode_audio(audio_input, device=device)[key].squeeze(dim=0)
+            output_dict[key] = self.encode_audio(audio_input, device=device)[
+                key].squeeze(dim=0)
         elif self.audio_cfg.model_type == "HTSAT":
             # repeat
             audio_len = len(audio)
@@ -783,17 +803,20 @@ class CLAP(nn.Module):
 
             if audio_len > self.audio_cfg.clip_samples:
                 audio_input = [
-                    audio[pos : pos + self.audio_cfg.clip_samples].clone()
+                    audio[pos: pos + self.audio_cfg.clip_samples].clone()
                     for pos in range(
                         0, audio_len - self.audio_cfg.clip_samples, hopsize
                     )
                 ]
-                audio_input.append(audio[-self.audio_cfg.clip_samples :].clone())
+                audio_input.append(
+                    audio[-self.audio_cfg.clip_samples:].clone())
                 audio_input = torch.stack(audio_input)
-                output_dict[key] = self.encode_audio(audio_input, device=device)[key]
+                output_dict[key] = self.encode_audio(
+                    audio_input, device=device)[key]
             else:
                 audio_input = audio.unsqueeze(dim=0)
-                output_dict[key] = self.encode_audio(audio_input, device=device)[key].squeeze(dim=0)
+                output_dict[key] = self.encode_audio(audio_input, device=device)[
+                    key].squeeze(dim=0)
 
         return output_dict
 

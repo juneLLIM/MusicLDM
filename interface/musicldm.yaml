@@ -45,7 +45,7 @@ model:
     conditioning_key: film
     monitor: val/loss_simple_ema
     scale_by_std: true
-    ckpt_path: 'log/musicldm-thornapple-jannabi/2025-06-15_20-07-48/checkpoints/last.ckpt' # Replace
+    ckpt_path: 'ckpt/musicldm-ckpt.ckpt' # Replace
     unet_config:
       target: latent_diffusion.modules.diffusionmodules.openaimodel.UNetModel
       params:

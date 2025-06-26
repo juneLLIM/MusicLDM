@@ -27,10 +27,9 @@ def make_index_dict(label_csv):
 
 
 class TextDataset(Dataset):
-    def __init__(self, data, logfile):
+    def __init__(self, data):
         super().__init__()
         self.data = data
-        self.logfile = logfile
 
     def __getitem__(self, index):
         data_dict = {}
@@ -39,12 +38,6 @@ class TextDataset(Dataset):
         data_dict['fbank'] = np.zeros((1024, 64))
         data_dict['waveform'] = np.zeros((32000))
         data_dict['text'] = self.data[index]
-        if index == 0:
-            with open(os.path.join(self.logfile), 'w') as f:
-                f.write(f"{data_dict['fname']}: {data_dict['text']}")
-        else:
-            with open(os.path.join(self.logfile), 'a') as f:
-                f.write(f"\n{data_dict['fname']}: {data_dict['text']}")
         return data_dict
 
     def __len__(self):

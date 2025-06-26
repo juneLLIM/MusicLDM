@@ -1,6 +1,7 @@
 """
 MusicLDM Core
 """
+import matplotlib.pyplot as plt
 import os
 
 import torch
@@ -2477,6 +2478,75 @@ class MusicLDM(DDPM):
                 print("Choose the following indexes:", best_index)
 
                 self.save_waveform(waveform, waveform_save_path, name=fnames)
+
+    @torch.no_grad()
+    def style_transfer(
+        self,
+        AdaIN=True
+    ):
+        # 예시 입력 이미지 (batch_size=1, 3채널, 64x64)
+        x_0 = torch.rand(1, 3, 64, 64).cuda()
+
+        # Diffusion schedule (cosine/sqrt-linear 등에서 추출 가능)
+        T = 1000
+        betas = torch.linspace(1e-4, 0.02, T).cuda()
+        alphas = 1. - betas
+        alphas_cumprod = torch.cumprod(alphas, dim=0)
+        sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
+        sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
+
+        # Step t
+        t = torch.tensor([500]).cuda()  # 중간 정도 단계
+
+        # 노이즈 추가
+        noise = torch.randn_like(x_0)
+        x_t = q_sample(x_0, noise, t, sqrt_alphas_cumprod,
+                       sqrt_one_minus_alphas_cumprod)
+
+        # -----------------------
+        # 예시: Noise AdaIN
+        # -----------------------
+
+        def adain(source_noise, target_noise):
+            # 스타일 정보 (평균과 표준편차)
+            def calc_stats(x):
+                mu = x.mean(dim=[2, 3], keepdim=True)
+                std = x.std(dim=[2, 3], keepdim=True)
+                return mu, std
+
+            mu_s, std_s = calc_stats(source_noise)
+            mu_t, std_t = calc_stats(target_noise)
+
+            return std_t * ((source_noise - mu_s) / (std_s + 1e-5)) + mu_t
+
+        # B에서 얻은 노이즈를 A에 적용
+        noise_B = torch.randn_like(x_0)
+        stylized_noise = adain(noise, noise_B)
+
+        # 다시 디노이즈 (예: DDIM or simplified reverse)
+        # 예시용 간단한 선형 역변환
+
+        def reverse_sample(x_t, noise_estimate, t):
+            return (x_t - sqrt_one_minus_alphas_cumprod[t] * noise_estimate) / sqrt_alphas_cumprod[t]
+
+        # 복원
+        x_restored = reverse_sample(x_t, stylized_noise, t)
+
+        # 시각화
+
+        def to_img(x): return x.clamp(
+            0, 1).squeeze().permute(1, 2, 0).cpu().numpy()
+
+        plt.subplot(1, 3, 1)
+        plt.imshow(to_img(x_0))
+        plt.title("Original")
+        plt.subplot(1, 3, 2)
+        plt.imshow(to_img(x_t))
+        plt.title(f"Noisy t={t.item()}")
+        plt.subplot(1, 3, 3)
+        plt.imshow(to_img(x_restored))
+        plt.title("Restored with AdaIN")
+        plt.show()
 
 
 class DiffusionWrapper(pl.LightningModule):

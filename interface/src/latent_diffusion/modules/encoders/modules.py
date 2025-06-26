@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from vector_quantize_pytorch import ResidualVQ
 from einops import rearrange
 
+
 class CLAPAudioEmbeddingClassifierFreev2(nn.Module):
     def __init__(
         self,
@@ -79,10 +80,11 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Module):
         t_steps = waveform.size(-1)
         for i in range(waveform.size(0)):
             mute_size = int(
-                self.random_uniform(0, end=int(t_steps * self.max_random_mute_portion))
+                self.random_uniform(0, end=int(
+                    t_steps * self.max_random_mute_portion))
             )
             mute_start = int(self.random_uniform(0, t_steps - mute_size))
-            waveform[i, mute_start : mute_start + mute_size] = 0
+            waveform[i, mute_start: mute_start + mute_size] = 0
         return waveform
 
     def cos_similarity(self, waveform, text):
@@ -177,14 +179,15 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Module):
         )
         return {k: v.squeeze(0) for k, v in result.items()}
 
+
 class CLAPResidualVQ(nn.Module):
-    def __init__(self, 
-            clap_wrapper: CLAPAudioEmbeddingClassifierFreev2, 
-            codebook_size: int = 1024,
-            num_quantizers: int = 12,
-            ema_decay: float = 0.95,
-            ema_dead_threshold: float = 0.0
-        ) -> None:
+    def __init__(self,
+                 clap_wrapper: CLAPAudioEmbeddingClassifierFreev2,
+                 codebook_size: int = 1024,
+                 num_quantizers: int = 12,
+                 ema_decay: float = 0.95,
+                 ema_dead_threshold: float = 0.0
+                 ) -> None:
         super().__init__()
 
         self.clap_wrapper = clap_wrapper
@@ -194,22 +197,22 @@ class CLAPResidualVQ(nn.Module):
             param.requires_grad = False
 
         self.rvq = ResidualVQ(
-            dim = self.clap_wrapper.model.joint_embed_shape,
-            num_quantizers = num_quantizers,
-            codebook_size = codebook_size,
-            commitment_weight = 0.,
-            decay = ema_decay,
-            kmeans_init = True,
-            threshold_ema_dead_code = ema_dead_threshold
+            dim=self.clap_wrapper.model.joint_embed_shape,
+            num_quantizers=num_quantizers,
+            codebook_size=codebook_size,
+            commitment_weight=0.,
+            decay=ema_decay,
+            kmeans_init=True,
+            threshold_ema_dead_code=ema_dead_threshold
         )
-    
-    def forward(self, x, is_text = False):
+
+    def forward(self, x, is_text=False):
         '''
         x: either audio input [B, T] or text input [B]
         '''
         with torch.no_grad():
             self.clap_wrapper.eval()
-            self.clap_wrapper.embed_mode = 'text' if is_text else 'audio' 
+            self.clap_wrapper.embed_mode = 'text' if is_text else 'audio'
             embedding = self.clap_wrapper(x)
             self.clap_wrapper.embed_mode = self.clap_wrapper.embed_mode_orig
 
@@ -218,10 +221,3 @@ class CLAPResidualVQ(nn.Module):
 
         indices = rearrange(indices, 'n 1 c -> n c 1')
         return loss, q, indices
-    
-
-           
-
-        
-        
-
