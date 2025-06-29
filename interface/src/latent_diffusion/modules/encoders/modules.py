@@ -93,7 +93,7 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Module):
             self.embed_mode = "text"
             text_emb = self(text)
             similarity = F.cosine_similarity(audio_emb, text_emb, dim=2)
-            return similarity.squeeze()
+            return similarity.squeeze(dim=1)
 
     def forward(self, batch):
         # If you want this conditioner to be unconditional, set self.unconditional_prob = 1.0
@@ -150,6 +150,11 @@ class CLAPAudioEmbeddingClassifierFreev2(nn.Module):
             with torch.no_grad():
                 # the 'fusion' truncate mode can be changed to 'rand_trunc' if run in unfusion mode
                 text_data = self.tokenizer(batch)
+
+                for k, v in text_data.items():
+                    if v.dim() != 1:
+                        break
+                    text_data[k] = v.unsqueeze(0)
                 embed = self.model.get_text_embedding(text_data)
         embed = embed.unsqueeze(1)
         self.unconditional_token = self.model.get_text_embedding(
